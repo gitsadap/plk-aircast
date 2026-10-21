@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PLK AirCast · พยากรณ์ฝุ่น PM2.5 จังหวัดพิษณุโลก</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌫️</text></svg>">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- แผนที่ -->
+  <div id="map-container">
+    <div id="map"></div>
+    <canvas id="wind-canvas" aria-hidden="true"></canvas>
+  </div>
+
+  <!-- แถบหัว -->
+  <header class="topbar">
+    <div class="brand">
+      <h1>PLK AirCast</h1>
+      <p>พยากรณ์ฝุ่น PM2.5 ล่วงหน้า 3 วัน จังหวัดพิษณุโลก</p>
+    </div>
+    <div class="status-row" id="statusRow">
+      <span class="chip" id="chipData" title="ค่าฝุ่นย้อนหลัง 7 วันที่โมเดลใช้เป็นจุดเริ่มต้น">
+        <span class="dot"></span><span class="chip-text">กำลังโหลดข้อมูล…</span>
+      </span>
+      <span class="chip" id="chipWeather" title="แหล่งข้อมูลพยากรณ์อากาศ">
+        <span class="dot"></span><span class="chip-text">พยากรณ์อากาศ</span>
+      </span>
+      <span class="chip" id="chipRealtime" title="ค่า PM2.5 เรียลไทม์รายสถานี">
+        <span class="dot"></span><span class="chip-text">เรียลไทม์…</span>
+      </span>
+      <span class="chip chip-muted" id="chipHotspot" title="จุดความร้อน">
+        <span class="dot"></span><span class="chip-text">จุดความร้อน…</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- แผงซ้าย: สรุปสถานการณ์ -->
+  <aside class="panel panel-left" id="summaryPanel" aria-label="สรุปคุณภาพอากาศ">
+    <button class="sheet-handle" id="sheetHandle" aria-expanded="true" aria-controls="summaryPanel">
+      <span></span><em>สรุปสถานการณ์</em>
+    </button>
+
+    <section class="hero" id="hero">
+      <div class="hist-note" id="histNote" hidden>วันที่มีค่าตรวจวัดจะแสดงค่าจริง วันที่ไม่มีเป็นค่าจากโมเดล (ใช้อากาศและจุดความร้อนจริงของวันนั้น)</div>
+      <div class="hero-when" id="heroWhen">ตอนนี้</div>
+      <div class="hero-main">
+        <div class="hero-number">
+          <span id="heroValue">–</span>
+          <small>µg/m³</small>
+        </div>
+        <div class="hero-tier">
+          <span class="tier-badge" id="heroBadge">–</span>
+          <span class="hero-scope">ค่าเฉลี่ยรายวันทั้งจังหวัด</span>
+        </div>
+      </div>
+      <p class="hero-advice" id="heroAdvice">กำลังคำนวณ…</p>
+      <dl class="hero-stats">
+        <div>
+          <dt>สูงสุด</dt>
+          <dd><b id="statMax">–</b><span id="statMaxWhere"></span></dd>
+        </div>
+        <div>
+          <dt>ต่ำสุด</dt>
+          <dd><b id="statMin">–</b><span id="statMinWhere"></span></dd>
+        </div>
+        <div>
+          <dt>สถานีที่เกิน 37.5</dt>
+          <dd><b id="statExceed">–</b><span id="statExceedOf"></span></dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="block">
+      <h2>ทำไมฝุ่นถึงเป็นแบบนี้</h2>
+      <div class="why-grid">
+        <div class="why-item">
+          <div class="why-icon">
+            <svg viewBox="0 0 24 24" id="windArrow" class="wind-arrow" aria-hidden="true"><path d="M12 3 L17 13 L12 10.5 L7 13 Z"/><rect x="11" y="10" width="2" height="11" rx="1"/></svg>
+          </div>
+          <div>
+            <div class="why-label">ลม</div>
+            <div class="why-value" id="wxWind">–</div>
+            <div class="why-note" id="wxWindNote">–</div>
+          </div>
+        </div>
+        <div class="why-item">
+          <div class="why-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M6 20V9M12 20V4M18 20v-8" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="why-label">ความสูงชั้นผสมอากาศ</div>
+            <div class="why-value" id="wxMix">–</div>
+            <div class="why-note" id="wxMixNote">–</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="vent">
+        <div class="vent-head">
+          <span>การระบายอากาศ <small>(ลม × ความสูงชั้นผสม)</small></span>
+          <b id="ventValue">–</b>
+        </div>
+        <div class="vent-track" role="img" aria-label="มาตรวัดการระบายอากาศ" id="ventTrack">
+          <span class="vent-zone z-poor"></span><span class="vent-zone z-mid"></span><span class="vent-zone z-good"></span>
+          <i class="vent-marker" id="ventMarker"></i>
+        </div>
+        <div class="vent-scale"><span>อากาศนิ่ง ฝุ่นสะสม</span><span>ถ่ายเทดี</span></div>
+      </div>
+
+      <div class="hs-row" id="hsRow" hidden>
+        <span>จุดความร้อนในจังหวัด <small>24 ชม.ก่อนเวลาที่เลือก · แท่ง = 5 วัน</small></span>
+        <b id="hsCount">–</b>
+        <span class="hs-bars" id="hsBars" aria-hidden="true"></span>
+      </div>
+
+      <div class="urban-row">
+        <span>การยกตัวของอากาศเขตเมือง</span>
+        <b id="urbanUpdraft">–</b>
+        <em id="urbanState">–</em>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>รายอำเภอ <small>เรียงจากฝุ่นมากไปน้อย · คลิกเพื่อซูม</small></h2>
+      <ol class="district-list" id="districtList"></ol>
+    </section>
+
+    <footer class="panel-foot">
+      <span>โมเดล Extra Trees · R² 0.82 · RMSE 10.1 µg/m³</span>
+      <button class="link-btn" id="openAccuracyBtn">ความแม่นยำของโมเดล</button>
+    </footer>
+  </aside>
+
+  <!-- แผงขวา: ชั้นข้อมูล -->
+  <aside class="panel panel-right" id="layerPanel" aria-label="ชั้นข้อมูลบนแผนที่">
+    <div class="layers-head">
+      <button class="layers-toggle" id="layersToggle" aria-expanded="false"><h2>ชั้นข้อมูล</h2></button>
+      <div class="segmented" role="group" aria-label="มุมมองแผนที่">
+        <button id="view2D" class="active" aria-pressed="true">2 มิติ</button>
+        <button id="view3D" aria-pressed="false">3 มิติ</button>
+      </div>
+    </div>
+    <ul class="layer-list">
+      <li>
+        <label><input type="checkbox" data-layer="pmSurface" checked>
+          <span class="sw sw-pm"></span>
+          <span class="ll-text"><b>พื้นผิวค่าฝุ่น</b><small id="gridLbl">กริด 1×1 กม. · ประมาณค่าระหว่างสถานี (IDW)</small></span>
+        </label>
+      </li>
+      <li>
+        <label><input type="checkbox" data-layer="stations" checked>
+          <span class="sw sw-station"></span>
+          <span class="ll-text"><b>สถานีตรวจวัด</b><small id="stationCountLbl">ค่าพยากรณ์ของแต่ละสถานี</small><small>ขอบเขียว = ค่าเรียลไทม์ · ขอบส้ม = ไม่มีค่าตรวจวัดล่าสุด</small></span>
+        </label>
+      </li>
+      <li>
+        <label><input type="checkbox" data-layer="wind" checked>
+          <span class="sw sw-wind"></span>
+          <span class="ll-text"><b>ทิศทางลม</b><small id="windLayerLbl">Open-Meteo 25 จุด · สีบอกความเร็ว</small></span>
+        </label>
+        <div class="mini-legend" id="windLegend"></div>
+      </li>
+      <li>
+        <label><input type="checkbox" data-layer="hotspots" checked>
+          <span class="sw sw-fire"></span>
+          <span class="ll-text"><b>จุดความร้อน</b><small id="hotspotLayerLbl">GISTDA VIIRS</small></span>
+        </label>
+      </li>
+      <li>
+        <label><input type="checkbox" data-layer="volume">
+          <span class="sw sw-volume"></span>
+          <span class="ll-text"><b>โดมความสูงชั้นผสมอากาศ</b><small>สีเข้มทึบ = เพดานต่ำ ฝุ่นถูกกัก · สีอ่อนโปร่ง = เพดานสูง</small></span>
+        </label>
+        <div class="mini-legend" id="domeLegend" hidden></div>
+        <div class="dome-status" id="domeStatus" hidden></div>
+      </li>
+    </ul>
+    <div class="legend" aria-label="ระดับคุณภาพอากาศ">
+      <div class="legend-title">ระดับ PM2.5 (µg/m³) ตามเกณฑ์ คพ.</div>
+      <div class="legend-scale" id="legendScale"></div>
+    </div>
+  </aside>
+
+  <!-- ลิ้นชักรายละเอียดสถานี -->
+  <aside class="panel drawer" id="stationDrawer" aria-label="รายละเอียดสถานี" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <span class="drawer-kicker" id="stDistrict">–</span>
+        <h2 id="stName">–</h2>
+      </div>
+      <button class="icon-btn" id="closeDrawerBtn" aria-label="ปิดรายละเอียดสถานี">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="st-hero" id="stHero">
+      <div class="hero-number"><span id="stValue">–</span><small>µg/m³</small></div>
+      <div class="st-hero-right">
+        <span class="tier-badge" id="stBadge">–</span>
+        <span class="st-when" id="stWhen">–</span>
+      </div>
+    </div>
+
+    <div class="st-horizons" id="stHorizons" aria-label="ค่าพยากรณ์ของสถานีนี้ตามช่วงเวลา"></div>
+
+    <div class="chart-wrap">
+      <div class="chart-title" id="chartTitle">แนวโน้ม 72 ชั่วโมง</div>
+      <div class="chart-box"><canvas id="stationChart"></canvas></div>
+      <p class="chart-note" id="chartNote">ค่าที่โมเดลคำนวณให้สถานีนี้รายชั่วโมง · เส้นประ = เวลาที่เลือก</p>
+    </div>
+
+    <div class="advice-box" id="stAdvice">–</div>
+  </aside>
+
+  <!-- ไทม์ไลน์ = กราฟพยากรณ์ -->
+  <footer class="timeline panel" aria-label="เลือกช่วงเวลาพยากรณ์">
+    <button class="play-btn" id="playBtn" aria-label="เล่นการพยากรณ์ต่อเนื่อง">
+      <svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <div class="tl-body">
+      <div class="tl-head">
+        <div class="segmented" role="group" aria-label="โหมดเวลา">
+          <button id="modeForecast" class="active" aria-pressed="true">พยากรณ์ 3 วัน</button>
+          <button id="modeHistory" aria-pressed="false">ย้อนหลัง 7 วัน</button>
+        </div>
+        <span class="tl-label" id="tlLabel">–</span>
+        <span class="tl-loading" id="tlLoading" hidden><i></i>กำลังโหลด</span>
+        <span class="tl-hint">← → ทีละชั่วโมง · Shift ทีละวัน</span>
+      </div>
+      <div class="tl-graph" id="tlGraph">
+        <svg id="tlSvg" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="tl-cursor" id="tlCursor"></div>
+      </div>
+      <div class="tl-stops" id="tlStops" role="group" aria-label="ช่วงเวลา"></div>
+    </div>
+  </footer>
+
+  <!-- ทูลทิป -->
+  <div class="map-tip" id="mapTip" role="tooltip"></div>
+
+  <!-- โหลด / แจ้งข้อผิดพลาด -->
+  <div class="loader" id="loader">
+    <div class="loader-card">
+      <div class="spinner"></div>
+      <p id="loaderText">กำลังรันโมเดลพยากรณ์…</p>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="alert"></div>
+
+  <!-- หน้าต่างความแม่นยำ -->
+  <dialog class="accuracy" id="accuracyDialog" aria-labelledby="accTitle">
+    <div class="acc-head">
+      <div>
+        <h3 id="accTitle">ความแม่นยำของโมเดล</h3>
+        <p>ทดสอบย้อนหลังกับข้อมูลที่โมเดลไม่เคยเห็น (มิ.ย. 2568 เป็นต้นไป, <span id="accSamples">8,486</span> ตัวอย่าง) พยากรณ์ล่วงหน้า 1 วันโดยใช้สภาพอากาศจริง</p>
+      </div>
+      <button class="icon-btn" id="closeAccuracyBtn" aria-label="ปิด">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+
+    <div class="acc-kpis">
+      <div><b>0.82</b><span>R² — อธิบายความแปรปรวนของค่าฝุ่นได้ราว 82%</span></div>
+      <div><b>10.1</b><span>RMSE (µg/m³) — คลาดเคลื่อนเฉลี่ยประมาณ ±10</span></div>
+      <div><b>0.92</b><span>Weighted κ — จัดระดับสีได้สอดคล้องกับค่าจริงสูงมาก</span></div>
+    </div>
+
+    <h4>ทายระดับสีถูกแค่ไหน</h4>
+    <div class="acc-table-wrap">
+      <table class="acc-table" id="accTierTable">
+        <thead>
+          <tr><th>ระดับ</th><th>ช่วงค่า</th><th title="ค่าเฉลี่ยของ Recall และ Precision">F1</th><th title="วันที่เป็นระดับนี้จริง โมเดลจับได้กี่ %">Recall</th><th title="เมื่อโมเดลบอกระดับนี้ ถูกจริงกี่ %">Precision</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="acc-hint">ระดับ "เขียว" ทายถูกน้อยที่สุด เพราะช่วงค่าแคบ (15–25) และมักสับสนกับระดับข้างเคียง</p>
+
+    <h4>ยิ่งพยากรณ์ไกล ยิ่งคลาดเคลื่อน <span class="est-tag">ค่าประมาณ</span></h4>
+    <div class="acc-horizons" id="accHorizons"></div>
+    <p class="acc-hint">ตัวเลขตามช่วงเวลาเป็นค่าประมาณที่ใส่ไว้ในระบบ ยังไม่ได้คำนวณจากการทดสอบย้อนหลังแยกตามช่วงเวลา</p>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

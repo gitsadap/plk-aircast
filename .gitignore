@@ -1,0 +1,17 @@
+# ห้ามขึ้น GitHub: API key
+*_key.txt
+.env
+
+# สภาพแวดล้อมและไฟล์ชั่วคราว
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# สำรองเวอร์ชันเก่า / โมเดลต้นฉบับขนาดใหญ่ / เว็บที่สร้างอัตโนมัติ
+backup_v*/
+pm25_model_original.joblib
+site/
+
+# ไฟล์ที่ไม่เกี่ยวกับเว็บ
+*.xlsx

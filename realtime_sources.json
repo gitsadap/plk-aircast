@@ -1,0 +1,33 @@
+{
+  "_อธิบาย": "แหล่งข้อมูล PM2.5 เรียลไทม์ แก้ไฟล์นี้แล้วรัน app.py ใหม่ | type: air4thai, json",
+  "sources": [
+    {
+      "name": "Air4Thai (กรมควบคุมมลพิษ)",
+      "type": "air4thai",
+      "enabled": true,
+      "url": "http://air4thai.pcd.go.th/services/getNewAQI_JSON.php",
+      "match_km": 0,
+      "_หมายเหตุ": "จับคู่ด้วยรหัสเท่านั้น: point_id 'PCD86t' <-> stationID '86t' | match_km > 0 จะจับคู่สถานีที่อยู่ใกล้ด้วย (ไม่แนะนำ: เป็นเครื่องวัดคนละเครื่อง)"
+    },
+    {
+      "name": "DustBoy (CMU CCDC)",
+      "type": "json",
+      "enabled": true,
+      "url": "https://open-api.cmuccdc.org/api/dustboy/station",
+      "headers": {
+        "Authorization": "Bearer {api_key}"
+      },
+      "api_key_file": "cmuccdc_key.txt",
+      "per_station": false,
+      "applies_to": "^[0-9]+$",
+      "list_path": "auto",
+      "id_path": "auto",
+      "value_path": "auto",
+      "time_path": "auto",
+      "time_format": "auto",
+      "match_km": 0,
+      "value_url": "",
+      "_หมายเหตุ": "API key อยู่ในไฟล์ cmuccdc_key.txt | รหัสสถานีใน stations.json = ไอดี DustBoy จึงจับคู่ด้วยรหัส | path = auto คือให้ระบบหาช่องข้อมูลเอง ตรวจผลที่ /api/realtime/probe | ถ้ารายชื่อสถานีไม่มีค่าฝุ่น ให้ใส่ value_url ของ endpoint ค่าฝุ่นรายสถานี เช่น https://open-api.cmuccdc.org/api/.../{id} (ใช้ {id} หรือ {uri} ได้)"
+    }
+  ]
+}
